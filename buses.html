@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+  <link rel="manifest" href="/bus-map/manifest.json"/>
+  <meta name="theme-color" content="#1B3A6B"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="SmartShuttle"/>
+  <link rel="apple-touch-icon" href="/bus-map/icon-192.png"/>
+  <title>Smart Shuttle — UNILORIN</title>
+  <style>
+    :root{
+      --primary:#1B3A6B;--accent:#F5A623;
+      --green:#2E7D32;--red:#C62828;--orange:#E65100;
+      --bg:#F0F2F5;--card:#fff;--text:#1a1a1a;--sub:#666;
+      --border:#E0E0E0;--school:#1565C0;--gate:#6A1B9A;
+    }
+    @media(prefers-color-scheme:dark){
+      :root{
+        --bg:#0F1923;--card:#1E2A38;--text:#F0F0F0;--sub:#9AA5B4;
+        --border:#2D3A4A;--primary:#2D5A9E;
+      }
+    }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+    /* HEADER */
+    .header{
+      background:var(--primary);color:white;
+      padding:14px 16px;position:sticky;top:0;z-index:200;
+      box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .header-row{display:flex;align-items:center;justify-content:space-between;}
+    .header h1{font-size:17px;font-weight:700;}
+    .header p{font-size:11px;opacity:.75;margin-top:2px;}
+    .map-btn{
+      background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.35);
+      color:white;padding:7px 13px;border-radius:20px;
+      font-size:12px;font-weight:700;cursor:pointer;
+      transition:background .2s;white-space:nowrap;
+    }
+    .map-btn:active{background:rgba(255,255,255,.35);}
+
+    /* ANNOUNCEMENT BANNER */
+    #announcement{
+      display:none;background:var(--accent);color:#1a1a1a;
+      padding:10px 16px;font-size:13px;font-weight:600;
+      text-align:center;
+    }
+
+    /* OFFLINE BANNER */
+    #offline-banner{
+      display:none;background:#333;color:white;
+      padding:8px 16px;font-size:12px;text-align:center;
+    }
+
+    /* NETWORK STATUS */
+    #network-dot{
+      width:8px;height:8px;border-radius:50%;
+      background:#4CAF50;display:inline-block;margin-right:6px;
+      transition:background .3s;
+    }
+
+    .content{padding:12px;max-width:520px;margin:0 auto;padding-bottom:80px;}
+
+    /* MY BOOKING BANNER */
+    #booking-banner{
+      display:none;background:var(--primary);color:white;
+      border-radius:14px;padding:14px 16px;
+      margin-bottom:12px;position:relative;
+      overflow:hidden;
+    }
+    #booking-banner::before{
+      content:'';position:absolute;right:-20px;top:-20px;
+      width:100px;height:100px;border-radius:50%;
+      background:rgba(255,255,255,.08);
+    }
+    .booking-banner-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .booking-code-display{
+      font-size:36px;font-weight:900;letter-spacing:8px;
+      color:var(--accent);line-height:1;
+    }
+    .booking-timer{font-size:11px;opacity:.75;margin-top:3px;}
+    .booking-cancel-btn{
+      background:rgba(255,255,255,.15);border:none;color:white;
+      padding:8px 12px;border-radius:10px;
+      font-size:12px;font-weight:700;cursor:pointer;
+      flex-shrink:0;white-space:nowrap;
+    }
+
+    /* FILTER TABS */
+    .filter-scroll{
+      display:flex;gap:8px;margin-bottom:12px;
+      overflow-x:auto;padding-bottom:2px;
+      scrollbar-width:none;
+    }
+    .filter-scroll::-webkit-scrollbar{display:none;}
+    .filter-tab{
+      padding:7px 14px;border-radius:20px;
+      border:1.5px solid var(--border);
+      background:var(--card);font-size:12px;
+      font-weight:700;color:var(--sub);cursor:pointer;
+      white-space:nowrap;flex-shrink:0;
+      transition:all .2s;
+    }
+    .filter-tab.active{
+      background:var(--primary);color:white;
+      border-color:var(--primary);
+    }
+
+    /* PULL TO REFRESH */
+    #ptr-indicator{
+      text-align:center;padding:12px;
+      font-size:12px;color:var(--sub);
+      display:none;
+    }
+
+    /* SKELETON LOADER */
+    .skeleton{
+      background:linear-gradient(90deg,var(--border) 25%,var(--card) 50%,var(--border) 75%);
+      background-size:200% 100%;
+      animation:shimmer 1.5s infinite;
+      border-radius:8px;
+    }
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .skeleton-card{
+      background:var(--card);border-radius:14px;
+      padding:16px;margin-bottom:10px;
+      box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+
+    /* BUS CARD */
+    .bus-card{
+      background:var(--card);border-radius:14px;
+      padding:16px;margin-bottom:10px;
+      box-shadow:0 2px 8px rgba(0,0,0,.07);
+      cursor:pointer;transition:transform .15s,box-shadow .15s;
+      border-left:5px solid var(--green);
+      position:relative;overflow:hidden;
+    }
+    .bus-card.full{border-left-color:var(--red);}
+    .bus-card.to-school{border-left-color:var(--school);}
+    .bus-card.to-gate{border-left-color:var(--gate);}
+    .bus-card.my-bus{border-left-color:var(--accent);}
+    .bus-card:active{transform:scale(.98);box-shadow:0 1px 4px rgba(0,0,0,.1);}
+
+    .bus-card-header{
+      display:flex;justify-content:space-between;
+      align-items:flex-start;margin-bottom:8px;
+    }
+    .bus-type-name{font-size:16px;font-weight:700;color:var(--text);}
+    .bus-type-icon{font-size:18px;margin-right:6px;}
+    .seats-badge{
+      padding:4px 10px;border-radius:20px;
+      color:white;font-size:11px;font-weight:700;flex-shrink:0;
+    }
+    .bus-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+    .chip{
+      background:var(--bg);padding:3px 9px;border-radius:20px;
+      font-size:11px;color:var(--sub);border:1px solid var(--border);
+    }
+    .chip.dir-chip{font-weight:700;}
+    .my-chip{background:var(--accent);color:white;border-color:var(--accent);}
+    .eta-row{
+      display:flex;align-items:center;justify-content:space-between;
+      padding-top:10px;border-top:1px solid var(--border);
+    }
+    .eta-text{font-size:13px;font-weight:600;color:var(--text);}
+    .action-pill{
+      padding:6px 14px;border-radius:20px;
+      color:white;font-size:12px;font-weight:700;
+    }
+
+    /* EMPTY STATES */
+    .empty-state{
+      text-align:center;padding:50px 20px;color:var(--sub);
+    }
+    .empty-icon{font-size:48px;margin-bottom:12px;}
+    .empty-title{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text);}
+    .empty-sub{font-size:13px;line-height:1.5;}
+
+    /* OPERATING HOURS CARD */
+    .hours-card{
+      background:var(--card);border-radius:12px;
+      padding:14px 16px;margin-bottom:12px;
+      border:1px solid var(--border);
+      display:flex;align-items:center;gap:12px;
+      font-size:13px;color:var(--sub);
+    }
+
+    /* MODAL */
+    .modal-overlay{
+      display:none;position:fixed;inset:0;
+      background:rgba(0,0,0,.55);z-index:300;
+      align-items:flex-end;justify-content:center;
+    }
+    .modal-overlay.open{display:flex;}
+    .modal{
+      background:var(--card);border-radius:20px 20px 0 0;
+      padding:22px;width:100%;max-width:520px;
+      animation:slideUp .3s ease;
+      max-height:92vh;overflow-y:auto;
+      padding-bottom:40px;
+    }
+    @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    .modal-handle{
+      width:36px;height:4px;background:var(--border);
+      border-radius:2px;margin:0 auto 16px;
+    }
+    .modal-header{
+      display:flex;justify-content:space-between;
+      align-items:center;margin-bottom:14px;
+    }
+    .modal-title{font-size:19px;font-weight:700;}
+    .modal-close{
+      background:var(--bg);border:none;border-radius:50%;
+      width:32px;height:32px;font-size:16px;
+      cursor:pointer;color:var(--sub);
+      display:flex;align-items:center;justify-content:center;
+    }
+    .modal-row{
+      display:flex;align-items:flex-start;gap:10px;
+      margin-bottom:10px;font-size:14px;
+    }
+    .modal-label{color:var(--sub);min-width:74px;flex-shrink:0;margin-top:1px;}
+    .modal-value{font-weight:600;color:var(--text);line-height:1.4;}
+    .modal-divider{border:none;border-top:1px solid var(--border);margin:14px 0;}
+
+    /* CONFIRMED BOOKING */
+    .booking-confirmed-box{
+      background:#E8F5E9;border-radius:14px;
+      padding:18px;text-align:center;margin-bottom:14px;
+    }
+    @media(prefers-color-scheme:dark){
+      .booking-confirmed-box{background:#1B3A2A;}
+    }
+    .booking-confirmed-box .bc-label{
+      font-size:12px;color:var(--green);
+      font-weight:700;margin-bottom:6px;
+    }
+    .booking-confirmed-box .bc-code{
+      font-size:52px;font-weight:900;
+      color:#1B5E20;letter-spacing:10px;line-height:1;
+    }
+    @media(prefers-color-scheme:dark){
+      .booking-confirmed-box .bc-code{color:#81C784;}
+    }
+    .booking-confirmed-box .bc-timer{
+      font-size:12px;color:var(--sub);margin-top:8px;
+    }
+    .booking-confirmed-box .bc-hint{
+      font-size:12px;color:var(--sub);margin-top:4px;
+    }
+
+    /* FARE INFO */
+    .fare-box{
+      background:var(--bg);border-radius:10px;
+      padding:12px;margin-bottom:12px;
+      display:flex;align-items:center;justify-content:space-between;
+      border:1px solid var(--border);
+    }
+    .fare-label{font-size:13px;color:var(--sub);}
+    .fare-amount{font-size:18px;font-weight:900;color:var(--primary);}
+
+    /* BUTTONS */
+    .book-btn{
+      width:100%;padding:15px;border:none;
+      border-radius:12px;font-size:16px;font-weight:700;
+      color:white;cursor:pointer;transition:opacity .2s;
+      margin-bottom:10px;
+    }
+    .book-btn:active{opacity:.85;}
+    .book-btn:disabled{background:#9E9E9E!important;cursor:default;opacity:1;}
+    .cancel-btn{
+      width:100%;padding:11px;
+      border:1.5px solid var(--red);border-radius:12px;
+      font-size:14px;font-weight:700;
+      color:var(--red);background:transparent;cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-row">
+    <div>
+      <h1>
+        <span id="network-dot"></span>Smart Shuttle
+      </h1>
+      <p>UNILORIN Campus Transport</p>
+    </div>
+    <button class="map-btn" onclick="window.location.href='index.html'">🗺️ Live Map</button>
+  </div>
+</div>
+
+<!-- Announcement (from admin) -->
+<div id="announcement"></div>
+
+<!-- Offline indicator -->
+<div id="offline-banner">📵 You're offline — showing last known data</div>
+
+<div class="content">
+
+  <!-- My Booking Banner -->
+  <div id="booking-banner">
+    <div style="font-size:11px;opacity:.7;margin-bottom:4px;">YOUR BOOKING CODE</div>
+    <div class="booking-banner-row">
+      <div>
+        <div class="booking-code-display" id="banner-code">----</div>
+        <div class="booking-timer" id="banner-timer">Expires in --:--</div>
+      </div>
+      <button class="booking-cancel-btn" onclick="cancelFromBanner()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Operating hours info -->
+  <div class="hours-card" id="hours-card" style="display:none;">
+    🕐 Operating hours: <strong>6:30 AM – 8:00 PM</strong> &nbsp;·&nbsp; Check back during service hours
+  </div>
+
+  <!-- Pull to refresh -->
+  <div id="ptr-indicator">↻ Release to refresh</div>
+
+  <!-- Direction filter -->
+  <div class="filter-scroll">
+    <button class="filter-tab active" id="f-all"    onclick="setFilter('all')">All Buses</button>
+    <button class="filter-tab"        id="f-school" onclick="setFilter('to_school')">→ To School Park</button>
+    <button class="filter-tab"        id="f-gate"   onclick="setFilter('to_gate')">← To Gate Park</button>
+    <button class="filter-tab"        id="f-available" onclick="setFilter('available')">Seats Available</button>
+  </div>
+
+  <!-- Loading skeletons -->
+  <div id="skeleton-area">
+    <div class="skeleton-card"><div class="skeleton" style="height:18px;width:60%;margin-bottom:8px;"></div><div class="skeleton" style="height:14px;width:40%;"></div></div>
+    <div class="skeleton-card"><div class="skeleton" style="height:18px;width:70%;margin-bottom:8px;"></div><div class="skeleton" style="height:14px;width:50%;"></div></div>
+  </div>
+
+  <div id="no-buses" class="empty-state" style="display:none;">
+    <div class="empty-icon">🚌</div>
+    <div class="empty-title">No buses online right now</div>
+    <div class="empty-sub">Operating hours: 6:30 AM – 8:00 PM<br>Pull down to refresh</div>
+  </div>
+
+  <div id="bus-list"></div>
+</div>
+
+<!-- Booking Modal -->
+<div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
+  <div class="modal" id="modal-inner">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="m-title">Bus</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="modal-row">
+      <span class="modal-label">Driver</span>
+      <span class="modal-value" id="m-driver">—</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">Direction</span>
+      <span class="modal-value" id="m-dir">—</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">Seats</span>
+      <span class="modal-value" id="m-seats">—</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">⏱ ETA</span>
+      <span class="modal-value" id="m-eta">—</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">📊 Queue</span>
+      <span class="modal-value" id="m-queue">—</span>
+    </div>
+
+    <!-- Fare info -->
+    <div class="fare-box">
+      <span class="fare-label">💰 Estimated Fare</span>
+      <span class="fare-amount" id="m-fare">₦150</span>
+    </div>
+
+    <hr class="modal-divider"/>
+
+    <!-- Booking confirmed state -->
+    <div class="booking-confirmed-box" id="m-confirmed" style="display:none;">
+      <div class="bc-label">YOUR BOOKING CODE — SHOW TO DRIVER</div>
+      <div class="bc-code" id="m-code">----</div>
+      <div class="bc-timer" id="m-timer">Expires in 30:00</div>
+      <div class="bc-hint">Driver will type this code to confirm boarding</div>
+    </div>
+
+    <button class="book-btn" id="m-book-btn" style="background:var(--primary);" onclick="bookSeat()">
+      🎟️ Book a Seat
+    </button>
+    <button class="cancel-btn" id="m-cancel-btn" style="display:none;" onclick="cancelBooking()">
+      Cancel Booking
+    </button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyDRmrKcsfFzy0oiWDhn5vBBLW-V2-gWMZ4",
+  authDomain:"smart-campus-shuttle-tracker.firebaseapp.com",
+  projectId:"smart-campus-shuttle-tracker",
+  storageBucket:"smart-campus-shuttle-tracker.firebasestorage.app",
+  messagingSenderId:"738720823079",
+  appId:"1:738720823079:web:f5c504cfb7054a7ad29b02"
+});
+var db = firebase.firestore();
+
+// ── COORDINATES ───────────────────────────────────────────────
+var GATE_LAT=8.4750, GATE_LNG=4.5490;
+var SCHOOL_LAT=8.4830, SCHOOL_LNG=4.5520;
+var AT_PARK_KM=0.08;
+
+// ── STATE ─────────────────────────────────────────────────────
+var allBuses={}, activeBusCount=0, fleetAvgSeats=12;
+var campusConfig={base_headway:15,special_event_factor:0};
+var currentFilter='all', selectedBus=null;
+var timerInterval=null;
+
+// ── NETWORK STATUS ────────────────────────────────────────────
+function updateNetworkStatus(){
+  var dot = document.getElementById('network-dot');
+  var banner = document.getElementById('offline-banner');
+  if(navigator.onLine){
+    dot.style.background='#4CAF50';
+    banner.style.display='none';
+  } else {
+    dot.style.background='#F44336';
+    banner.style.display='block';
+  }
+}
+window.addEventListener('online',  updateNetworkStatus);
+window.addEventListener('offline', updateNetworkStatus);
+updateNetworkStatus();
+
+// ── BOOKING STATE (localStorage — shared across pages) ────────
+function getBooking(){
+  return{
+    id:   localStorage.getItem('bookingId')  ||null,
+    code: localStorage.getItem('bookingCode')||null,
+    busId:localStorage.getItem('bookingBusId')||null,
+    exp:  parseInt(localStorage.getItem('bookingExp')||'0')
+  };
+}
+function saveBooking(id,code,busId,expMs){
+  localStorage.setItem('bookingId',   id);
+  localStorage.setItem('bookingCode', code);
+  localStorage.setItem('bookingBusId',busId);
+  localStorage.setItem('bookingExp',  expMs.toString());
+}
+function clearBooking(){
+  ['bookingId','bookingCode','bookingBusId','bookingExp']
+    .forEach(function(k){localStorage.removeItem(k);});
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+function haversineKm(a,b,c,d){
+  var R=6371,dL=(c-a)*Math.PI/180,dN=(d-b)*Math.PI/180;
+  var x=Math.sin(dL/2)*Math.sin(dL/2)+
+        Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
+        Math.sin(dN/2)*Math.sin(dN/2);
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+function calcETA(lat,lng,dir){
+  if(!lat&&!lng) return 'GPS loading...';
+  var dG=haversineKm(lat,lng,GATE_LAT,GATE_LNG);
+  var dS=haversineKm(lat,lng,SCHOOL_LAT,SCHOOL_LNG);
+  if(dG<=AT_PARK_KM) return '🟢 At Gate Park';
+  if(dS<=AT_PARK_KM) return '🟢 At School Park';
+  var toSchool=(dir==='to_school')||((!dir)&&dG<dS);
+  var dest=toSchool?'School Park':'Gate Park';
+  var m=Math.round(((toSchool?dS:dG)/20)*60);
+  if(m<1) return '🟢 Arriving at '+dest;
+  if(m>60) return '🔴 Over 1 hour to '+dest;
+  return (m<=5?'🟢':m<=15?'🟡':'🔴')+' ~'+m+' min to '+dest;
+}
+
+function calcEtaMins(lat,lng,dir){
+  if(!lat&&!lng) return 99;
+  var dG=haversineKm(lat,lng,GATE_LAT,GATE_LNG);
+  var dS=haversineKm(lat,lng,SCHOOL_LAT,SCHOOL_LNG);
+  if(dG<=AT_PARK_KM||dS<=AT_PARK_KM) return 0;
+  var toSchool=(dir==='to_school')||((!dir)&&dG<dS);
+  return Math.round(((toSchool?dS:dG)/20)*60);
+}
+
+function calcQueue(){
+  var t=new Date().getHours()+new Date().getMinutes()/60;
+  var pf=t>=6.5&&t<=10?2.0:t>=13.5&&t<=16.5?1.8:t>=17&&t<=19?1.3:1.0;
+  var ts=(t>=7.75&&t<=8.25)||(t>=9.75&&t<=10.25)||
+         (t>=11.75&&t<=12.25)||(t>=13.75&&t<=14.25)||
+         (t>=15.75&&t<=16.25)?0.5:pf>=1.8?0.3:0.0;
+  if(activeBusCount<=0||fleetAvgSeats<=0) return 'No buses online';
+  var pwt=(campusConfig.base_headway*pf*(1+ts+0.35+campusConfig.special_event_factor))
+          /(activeBusCount*fleetAvgSeats);
+  var m=Math.round(pwt);
+  if(pwt<1) return '🟢 Low — short queue';
+  if(m<=10) return '🟢 Low (~'+m+' min)';
+  if(m<=25) return '🟡 Moderate (~'+m+' min)';
+  return m>120?'🔴 Very high':'🔴 High (~'+m+' min)';
+}
+
+function dirLabel(dir){
+  if(dir==='to_school') return '🔵 → To School Park';
+  if(dir==='to_gate')   return '🟣 ← To Gate Park';
+  return '⚫ Direction not set';
+}
+
+function fareForType(type){
+  // Based on UNILORIN actual fares (update when confirmed)
+  return type==='Tricycle' ? '₦100' : '₦150';
+}
+
+function formatTimer(msLeft){
+  if(msLeft<=0) return 'Expired';
+  var s=Math.floor(msLeft/1000);
+  var m=Math.floor(s/60); s=s%60;
+  return m+':'+(s<10?'0':'')+s;
+}
+
+// ── BOOKING TIMER ─────────────────────────────────────────────
+function startTimer(){
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(function(){
+    var bk=getBooking();
+    if(!bk.id||!bk.exp){ clearInterval(timerInterval); return; }
+    var left = bk.exp - Date.now();
+    if(left <= 0){
+      // Expired
+      clearInterval(timerInterval);
+      expireBooking(bk);
+      return;
+    }
+    var str = formatTimer(left);
+    var timerEls = document.querySelectorAll('.booking-timer-val');
+    timerEls.forEach(function(el){ el.textContent = 'Expires in '+str; });
+    document.getElementById('banner-timer').textContent = 'Expires in '+str;
+    if(document.getElementById('m-timer'))
+      document.getElementById('m-timer').textContent = 'Expires in '+str;
+  }, 1000);
+}
+
+function expireBooking(bk){
+  if(bk.busId){
+    db.collection('buses').doc(bk.busId)
+      .update({available_seats:firebase.firestore.FieldValue.increment(1)})
+      .catch(function(){});
+  }
+  if(bk.id){
+    db.collection('reservations').doc(bk.id)
+      .update({status:'Expired'}).catch(function(){});
+  }
+  clearBooking();
+  refreshBanner();
+  if(document.getElementById('modal').classList.contains('open')){
+    closeModal();
+  }
+  alert('⏰ Your booking expired after 30 minutes. Please book again.');
+}
+
+// ── BANNER ────────────────────────────────────────────────────
+function refreshBanner(){
+  var bk=getBooking();
+  var banner=document.getElementById('booking-banner');
+  if(bk.id&&bk.code&&bk.exp>Date.now()){
+    document.getElementById('banner-code').textContent=bk.code;
+    banner.style.display='block';
+    startTimer();
+  } else {
+    banner.style.display='none';
+    if(timerInterval){clearInterval(timerInterval);timerInterval=null;}
+    if(bk.id&&bk.exp<=Date.now()) expireBooking(bk);
+  }
+}
+
+function cancelFromBanner(){
+  var bk=getBooking();
+  if(!bk.id) return;
+  if(!confirm('Cancel your booking? Your seat will be released.')) return;
+  db.runTransaction(function(tx){
+    var bRef=db.collection('buses').doc(bk.busId);
+    var rRef=db.collection('reservations').doc(bk.id);
+    tx.update(bRef,{available_seats:firebase.firestore.FieldValue.increment(1)});
+    tx.update(rRef,{status:'Cancelled'});
+    return Promise.resolve();
+  }).then(function(){
+    clearBooking();
+    refreshBanner();
+    renderList();
+    closeModal();
+  }).catch(function(){ alert('Could not cancel. Try again.'); });
+}
+
+// ── LOAD CAMPUS CONFIG ────────────────────────────────────────
+db.collection('campuses').where('campus_id','==','UNILORIN_MAIN').get()
+  .then(function(s){
+    if(!s.empty){
+      var d=s.docs[0].data();
+      campusConfig.base_headway=d.base_headway||15;
+      campusConfig.special_event_factor=d.special_event_factor||0;
+      // Center coordinates
+      if(d.center_location){
+        GATE_LAT=d.center_location.latitude;
+        GATE_LNG=d.center_location.longitude;
+      }
+      // Announcement
+      if(d.announcement&&d.announcement.trim()){
+        var ann=document.getElementById('announcement');
+        ann.textContent='📢 '+d.announcement;
+        ann.style.display='block';
+      }
+    }
+  }).catch(function(){});
+
+// ── LIVE BUS LISTENER ─────────────────────────────────────────
+db.collection('buses').where('status','==','Active')
+  .onSnapshot(function(snap){
+    document.getElementById('skeleton-area').style.display='none';
+    activeBusCount=snap.docs.length;
+    var tot=0;
+    snap.docs.forEach(function(d){tot+=(d.data().max_capacity||12);});
+    fleetAvgSeats=activeBusCount>0?Math.round(tot/activeBusCount):12;
+
+    allBuses={};
+    snap.docs.forEach(function(doc){
+      allBuses[doc.id]=Object.assign({_id:doc.id},doc.data());
+    });
+
+    // Show hours card when no buses
+    document.getElementById('hours-card').style.display=
+      activeBusCount===0?'block':'none';
+
+    renderList();
+
+    // Refresh modal if open
+    if(selectedBus&&allBuses[selectedBus._id]){
+      selectedBus=allBuses[selectedBus._id];
+      fillModal(selectedBus);
+    } else if(selectedBus&&!allBuses[selectedBus._id]){
+      closeModal();
+    }
+
+    // Check arriving soon for booked bus
+    checkArrivingSoon();
+  }, function(){
+    document.getElementById('skeleton-area').style.display='none';
+  });
+
+// ── ARRIVING SOON ─────────────────────────────────────────────
+var arrivingShown=false;
+function checkArrivingSoon(){
+  var bk=getBooking();
+  if(!bk.id||!bk.busId) return;
+  var bus=allBuses[bk.busId];
+  if(!bus) return;
+  var lat=bus.location?bus.location.latitude:(bus.latitude||0);
+  var lng=bus.location?bus.location.longitude:(bus.longitude||0);
+  var mins=calcEtaMins(lat,lng,bus.direction||'');
+  if(mins<=3&&!arrivingShown){
+    arrivingShown=true;
+    showArrivingBanner(mins,bus.direction||'');
+    if(navigator.vibrate) navigator.vibrate([300,100,300,100,300]);
+  }
+  if(mins>5) arrivingShown=false;
+}
+
+function showArrivingBanner(mins,dir){
+  var dest=dir==='to_school'?'School Park':dir==='to_gate'?'Gate Park':'the park';
+  var msg=mins<=0?'Your bus is arriving now! Head to the stop immediately.'
+         :'Your bus arrives at '+dest+' in ~'+mins+' min. Head to the stop now!';
+  // Create/update arriving banner
+  var existing=document.getElementById('arriving-soon');
+  if(!existing){
+    existing=document.createElement('div');
+    existing.id='arriving-soon';
+    existing.style.cssText='position:fixed;top:0;left:0;right:0;z-index:500;'+
+      'background:#2E7D32;color:white;padding:14px 16px;font-size:14px;'+
+      'font-weight:700;text-align:center;animation:slideDown .4s ease;'+
+      'box-shadow:0 4px 12px rgba(0,0,0,.3);cursor:pointer;';
+    existing.onclick=function(){this.style.display='none';};
+    document.body.prepend(existing);
+  }
+  existing.textContent='🚌 '+msg;
+  existing.style.display='block';
+  setTimeout(function(){
+    if(existing) existing.style.display='none';
+  }, 10000);
+}
+
+// ── FILTER ────────────────────────────────────────────────────
+function setFilter(f){
+  currentFilter=f;
+  ['all','school','gate','available'].forEach(function(k){
+    document.getElementById('f-'+k).classList.remove('active');
+  });
+  document.getElementById('f-'+(
+    f==='all'?'all':f==='to_school'?'school':f==='to_gate'?'gate':'available'
+  )).classList.add('active');
+  renderList();
+}
+
+// ── RENDER LIST ───────────────────────────────────────────────
+function renderList(){
+  var bk=getBooking();
+  var keys=Object.keys(allBuses).filter(function(id){
+    var d=allBuses[id];
+    if(currentFilter==='to_school') return d.direction==='to_school';
+    if(currentFilter==='to_gate')   return d.direction==='to_gate';
+    if(currentFilter==='available') return (d.available_seats||0)>0;
+    return true;
+  });
+
+  var list=document.getElementById('bus-list');
+  var noBuses=document.getElementById('no-buses');
+
+  if(keys.length===0){
+    list.innerHTML='';
+    noBuses.style.display='block';
+    return;
+  }
+  noBuses.style.display='none';
+
+  list.innerHTML=keys.map(function(id){
+    var d=allBuses[id];
+    var seats=d.available_seats||0;
+    var max=d.max_capacity||12;
+    var type=d.bus_type||'Bus';
+    var dir=d.direction||'';
+    var driver=d.driver_name||'Unknown';
+    var lat=d.location?d.location.latitude:(d.latitude||0);
+    var lng=d.location?d.location.longitude:(d.longitude||0);
+    var isFull=seats<=0;
+    var isMyBus=bk.id&&bk.busId===id;
+    var eta=calcETA(lat,lng,dir);
+    var dirClass=isFull?'full':isMyBus?'my-bus':
+                 dir==='to_school'?'to-school':
+                 dir==='to_gate'?'to-gate':'';
+    var dirColor=isFull?'#F44336':dir==='to_school'?'#1565C0':
+                 dir==='to_gate'?'#6A1B9A':'#757575';
+    var badgeColor=isFull?'#F44336':seats<=3?'#E65100':'#4CAF50';
+
+    return '<div class="bus-card '+dirClass+'" onclick="openModal(\''+id+'\')">'+
+      '<div class="bus-card-header">'+
+        '<span class="bus-type-name">'+
+          '<span class="bus-type-icon">'+(type==='Tricycle'?'🛺':'🚌')+'</span>'+
+          type+
+        '</span>'+
+        '<span class="seats-badge" style="background:'+badgeColor+'">'+
+          (isFull?'FULL':seats+'/'+max+' seats')+
+        '</span>'+
+      '</div>'+
+      '<div class="bus-chips">'+
+        '<span class="chip">👤 '+driver+'</span>'+
+        '<span class="chip dir-chip" style="color:'+dirColor+';border-color:'+dirColor+'">'+
+          (dir==='to_school'?'→ To School':dir==='to_gate'?'← To Gate':'Unknown')+
+        '</span>'+
+        '<span class="chip">'+fareForType(type)+'</span>'+
+        (isMyBus?'<span class="chip my-chip">✓ Your Bus</span>':'')+
+      '</div>'+
+      '<div class="eta-row">'+
+        '<span class="eta-text">'+eta+'</span>'+
+        '<span class="action-pill" style="background:'+(isFull?'#9E9E9E':isMyBus?'#F5A623':dirColor)+'">'+
+          (isFull?'Full':isMyBus?'View Code →':'Book →')+
+        '</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────
+function openModal(id){
+  selectedBus=allBuses[id];
+  if(!selectedBus) return;
+  fillModal(selectedBus);
+  document.getElementById('modal').classList.add('open');
+}
+
+function fillModal(d){
+  var bk=getBooking();
+  var seats=d.available_seats||0;
+  var max=d.max_capacity||12;
+  var lat=d.location?d.location.latitude:(d.latitude||0);
+  var lng=d.location?d.location.longitude:(d.longitude||0);
+  var dir=d.direction||'';
+  var type=d.bus_type||'Bus';
+
+  document.getElementById('m-title').textContent=
+    (type==='Tricycle'?'🛺 ':'🚌 ')+type;
+  document.getElementById('m-driver').textContent=d.driver_name||'Unknown';
+  document.getElementById('m-dir').textContent=dirLabel(dir);
+  document.getElementById('m-seats').textContent=seats+' / '+max+' available';
+  document.getElementById('m-eta').textContent=calcETA(lat,lng,dir);
+  document.getElementById('m-queue').textContent=calcQueue();
+  document.getElementById('m-fare').textContent=fareForType(type);
+
+  var isMyBus=bk.id&&bk.busId===d._id;
+  var hasOther=bk.id&&bk.busId!==d._id;
+
+  var confirmed=document.getElementById('m-confirmed');
+  var bookBtn=document.getElementById('m-book-btn');
+  var cancelBtn=document.getElementById('m-cancel-btn');
+
+  if(isMyBus&&bk.exp>Date.now()){
+    confirmed.style.display='block';
+    document.getElementById('m-code').textContent=bk.code;
+    document.getElementById('m-timer').textContent=
+      'Expires in '+formatTimer(bk.exp-Date.now());
+    bookBtn.style.display='none';
+    cancelBtn.style.display='block';
+  } else {
+    confirmed.style.display='none';
+    cancelBtn.style.display='none';
+    bookBtn.style.display='block';
+    if(hasOther){
+      bookBtn.textContent='❌ Already booked another bus';
+      bookBtn.style.background='#9E9E9E';
+      bookBtn.disabled=true;
+    } else if(seats<=0){
+      bookBtn.textContent='Bus is Full';
+      bookBtn.style.background='#9E9E9E';
+      bookBtn.disabled=true;
+    } else {
+      bookBtn.textContent='🎟️ Book a Seat — '+fareForType(type);
+      bookBtn.style.background='var(--primary)';
+      bookBtn.disabled=false;
+    }
+  }
+}
+
+function closeModal(){
+  document.getElementById('modal').classList.remove('open');
+}
+function closeModalOutside(e){
+  if(e.target===document.getElementById('modal')) closeModal();
+}
+
+// ── BOOK SEAT ─────────────────────────────────────────────────
+function genCode(){
+  var c='ABCDEFGHJKMNPQRSTUVWXYZ23456789',s='';
+  for(var i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+
+function bookSeat(){
+  if(!selectedBus||(selectedBus.available_seats||0)<=0) return;
+  if(getBooking().id) return;
+
+  var btn=document.getElementById('m-book-btn');
+  btn.disabled=true; btn.textContent='⏳ Booking...';
+
+  var code=genCode();
+  var expMs=Date.now()+30*60*1000; // 30 minutes
+  var busRef=db.collection('buses').doc(selectedBus._id);
+  var resRef=db.collection('reservations').doc();
+
+  db.runTransaction(function(tx){
+    return tx.get(busRef).then(function(s){
+      if(!s.exists) throw new Error('Bus not found');
+      if((s.data().available_seats||0)<=0) throw new Error('No seats left');
+      tx.update(busRef,{available_seats:firebase.firestore.FieldValue.increment(-1)});
+      tx.set(resRef,{
+        bus_document_id:selectedBus._id,
+        bus_type:selectedBus.bus_type,
+        booking_code:code,
+        status:'Booked',
+        timestamp:firebase.firestore.FieldValue.serverTimestamp(),
+        expires_at:new Date(expMs),
+        campus_id:'UNILORIN_MAIN'
+      });
+    });
+  }).then(function(){
+    saveBooking(resRef.id,code,selectedBus._id,expMs);
+    fillModal(selectedBus);
+    refreshBanner();
+    renderList();
+  }).catch(function(e){
+    btn.disabled=false;
+    btn.textContent='🎟️ Book a Seat';
+    alert(e.message.includes('No seats')?
+      'Sorry — that last seat was just taken!':'Booking failed: '+e.message);
+  });
+}
+
+// ── CANCEL BOOKING ────────────────────────────────────────────
+function cancelBooking(){
+  var bk=getBooking();
+  if(!bk.id) return;
+  if(!confirm('Cancel your booking? Your seat will be released.')) return;
+  db.runTransaction(function(tx){
+    var bRef=db.collection('buses').doc(bk.busId);
+    var rRef=db.collection('reservations').doc(bk.id);
+    tx.update(bRef,{available_seats:firebase.firestore.FieldValue.increment(1)});
+    tx.update(rRef,{status:'Cancelled'});
+    return Promise.resolve();
+  }).then(function(){
+    clearBooking();
+    refreshBanner();
+    closeModal();
+    renderList();
+  }).catch(function(){ alert('Could not cancel. Try again.'); });
+}
+
+// ── PULL TO REFRESH ───────────────────────────────────────────
+var touchStartY=0;
+document.addEventListener('touchstart',function(e){
+  touchStartY=e.touches[0].clientY;
+},{ passive:true });
+document.addEventListener('touchmove',function(e){
+  var diff=e.touches[0].clientY-touchStartY;
+  if(diff>60&&window.scrollY===0){
+    document.getElementById('ptr-indicator').style.display='block';
+  }
+},{ passive:true });
+document.addEventListener('touchend',function(){
+  if(document.getElementById('ptr-indicator').style.display==='block'){
+    document.getElementById('ptr-indicator').style.display='none';
+    // Re-trigger by showing skeleton
+    document.getElementById('skeleton-area').style.display='block';
+    setTimeout(function(){
+      document.getElementById('skeleton-area').style.display='none';
+    },1000);
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────
+refreshBanner();
+
+// PWA service worker
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/bus-map/sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
