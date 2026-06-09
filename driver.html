@@ -468,6 +468,9 @@ function startTrip(){
   document.getElementById('dir-school').disabled=true;
   document.getElementById('dir-gate').disabled=true;
   if(currentData) renderBusInfo();
+
+    // Signal FlutterFlow with the selected bus ID
+  window.location.hash = 'TRIP_STARTED:' + busId;
 }
 
 function stopTrip(){
@@ -498,6 +501,9 @@ function stopTrip(){
   document.getElementById('stat-boarded').textContent='0';
   document.getElementById('stat-cash').textContent='0';
   if(currentData) renderBusInfo();
+
+  // Signal FlutterFlow trip stopped
+  window.location.hash = 'TRIP_STOPPED:' + busId;
 }
 
 // ── BUS LISTENER ──────────────────────────────────────────────
